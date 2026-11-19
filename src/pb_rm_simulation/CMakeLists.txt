@@ -1,13 +1,8 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 project(pb_rm_simulation)
 
-## Use C++14
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-## By adding -Wall and -Werror, the compiler does not ignore warnings anymore,
-## enforcing cleaner code.
-add_definitions(-Wall -Werror)
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ${CMAKE_EXPORT_COMPILE_COMMANDS})
@@ -17,22 +12,28 @@ endif()
 ## Find dependencies ##
 #######################
 
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+find_package(ament_cmake REQUIRED)
+find_package(gz-sim8 REQUIRED)
+find_package(gz-plugin2 REQUIRED COMPONENTS register)
+find_package(gz-transport13 REQUIRED)
+find_package(gz-msgs10 REQUIRED)
+find_package(gz-math7 REQUIRED)
 
 ###########
 ## Build ##
 ###########
 
-# ament_auto_add_library(${PROJECT_NAME} SHARED
-#   src/rm_serial_driver.cpp
-#   src/crc.cpp
-# )
-
-# rclcpp_components_register_node(${PROJECT_NAME}
-#   PLUGIN rm_serial_driver::RMSerialDriver
-#   EXECUTABLE ${PROJECT_NAME}_node
-# )
+add_library(pb_rm_omni_chassis_system SHARED
+  src/omni_chassis_system.cpp
+)
+target_compile_options(pb_rm_omni_chassis_system PRIVATE -Wall -Wextra)
+target_link_libraries(pb_rm_omni_chassis_system PRIVATE
+  gz-sim8::gz-sim8
+  gz-plugin2::register
+  gz-transport13::gz-transport13
+  gz-msgs10::gz-msgs10
+  gz-math7::gz-math7
+)
 
 #############
 ## Testing ##
@@ -51,11 +52,22 @@ endif()
 ## Install ##
 #############
 
-ament_auto_package(
-  INSTALL_TO_SHARE
+install(TARGETS pb_rm_omni_chassis_system
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(DIRECTORY
+  config
   launch
   urdf
   meshes
   world
   rviz
+  DESTINATION share/${PROJECT_NAME}
 )
+
+ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/env-hooks/pb_rm_simulation.dsv.in")
+
+ament_package()

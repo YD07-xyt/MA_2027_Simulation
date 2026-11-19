@@ -18,7 +18,7 @@
   <xacro:arg name="rpy" default="3.14 0 0" /> -->
   <xacro:arg name="xyz" default="0.0 0.0 0.15" />
   <xacro:arg name="rpy" default="0 0 0" />
-
+  <xacro:arg name="use_livox" default="false" />
 
   <link name="mesh"/>
 
@@ -28,8 +28,8 @@
         <box size="0.2 .3 .1"/>
       </geometry>
       <origin rpy="0 0 ${PI/2}" xyz="0 0 0.05"/>
-      <material name="white">
-        <color rgba="1 1 1 1"/>
+      <material name="orange">
+        <color rgba="0.95 0.45 0.1 1"/>
       </material>
     </visual>
     <collision>
@@ -52,8 +52,8 @@
         <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="black">
-        <color rgba="0 0 0 1"/>
+      <material name="red">
+        <color rgba="0.85 0.15 0.15 1"/>
       </material>
     </visual>
     <collision>
@@ -61,8 +61,6 @@
         <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
       </geometry>
     </collision>
-    <mu1>0.5</mu1>
-    <mu2>0.5</mu2>
     <xacro:default_inertial mass="0.5"/>
   </link>
 
@@ -72,15 +70,15 @@
         <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="black"/>
+      <material name="black">
+        <color rgba="0.15 0.15 0.15 1"/>
+      </material>
     </visual>
     <collision>
       <geometry>
         <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
       </geometry>
     </collision>
-    <mu1>0.5</mu1>
-    <mu2>0.5</mu2>
     <xacro:default_inertial mass="0.5"/>
   </link>
 
@@ -90,15 +88,13 @@
         <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="black"/>
+      <material name="red"/>
     </visual>
     <collision>
       <geometry>
         <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
       </geometry>
     </collision>
-    <mu1>0.5</mu1>
-    <mu2>0.5</mu2>
     <xacro:default_inertial mass="0.5"/>
   </link>
 
@@ -115,16 +111,11 @@
         <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
       </geometry>
     </collision>
-    <mu1>0.5</mu1>
-    <mu2>0.5</mu2>
     <xacro:default_inertial mass="0.5"/>
   </link>
 
-  <!-- 轮子关节加一点粘性阻尼和库仑摩擦，模拟电机/减速器阻力。
-       原来 wheel 是零阻尼自由滚动的理想轮，在倾斜的地图网格（RMUC2027 出生台约 1.5° 坡）
-       上会缓慢蠕动；planar_move 只是每 tick 覆写一次速度，覆写之间重力仍会积分，
-       自由轮 + 接触求解会积累出"轻微缓慢移动"。
-       damping 取得很小，不影响正常行驶（planar_move 是直接给模型速度）。 -->
+  <!-- 轮子关节保留轻微阻尼与摩擦，由全向底盘动力学插件施加水平驱动力与偏航力矩，
+       竖直方向与地形俯仰/滚转完全交由重力与轮地接触约束求解。 -->
   <joint name="base_to_wheel1" type="continuous">
     <parent link="base_link"/>
     <child link="wheel_1"/>
@@ -159,7 +150,7 @@
     <dynamics damping="0.01" friction="0.05"/>
   </joint>
 
-  <!-- IMU joint 说明（注意注释里不要出现英文冒号加空格，会让 launch 的 robot_description 解析失败）
+  <!-- IMU joint 说明（注意注释里不要出现英文冒号加空格）
        Mid-360 内置 IMU，挂在雷达坐标系下，随雷达 xyz/rpy 参数一起移动。
        偏移量由本仓库 Super-LIO 配置反推：
          lio.extrinsic.lidar_imu = [-0.011, -0.02329, 0.04412, I]   (LiDAR 在 IMU 系下的平移)
@@ -180,81 +171,65 @@
     </inertial>
   </link>
 
-  <!-- Gazebo插件设置相关 -->
-  <gazebo reference="base_link">
-    <material>Gazebo/Orange</material>
-  </gazebo>
+  <!-- 轮地低滑动摩擦：允许底盘在全向力控下自由横移/旋转，同时稳定支撑车身随坡度贴地 -->
   <gazebo reference="wheel_1">
-    <material>Gazebo/Red</material>
+    <mu1>0.02</mu1>
+    <mu2>0.02</mu2>
   </gazebo>
   <gazebo reference="wheel_2">
-    <material>Gazebo/Black</material>
+    <mu1>0.02</mu1>
+    <mu2>0.02</mu2>
   </gazebo>
   <gazebo reference="wheel_3">
-    <material>Gazebo/Red</material>
+    <mu1>0.02</mu1>
+    <mu2>0.02</mu2>
   </gazebo>
   <gazebo reference="wheel_4">
-    <material>Gazebo/Black</material>
-  </gazebo>
-  <gazebo reference="imu_link">
-    <material>Gazebo/BuildingFrame</material>
-  </gazebo>
-  <gazebo reference="livox_frame">
-    <material>Gazebo/LightBlueLaser</material>
+    <mu1>0.02</mu1>
+    <mu2>0.02</mu2>
   </gazebo>
 
-  <!-- Drive controller plugin-->
-  <!-- https://github.com/ros-simulation/gazebo_ros_pkgs/wiki/ROS-2-Migration:-Planar-Move -->
+  <!-- Gazebo Harmonic 全向底盘控制器与关节状态发布 -->
   <gazebo>
-    <plugin name="mecanum_controller" filename="libgazebo_ros_planar_move.so">
-      <ros>
-        <!-- Add a namespace -->
-        <namespace>/</namespace>
-        <!-- Remap the default topic -->
-        <remapping>cmd_vel:=cmd_vel_chassis</remapping>
-        <remapping>odom:=odom</remapping>
-      </ros>
+    <plugin filename="pb_rm_omni_chassis_system" name="pb_rm_simulation::OmniChassisSystem">
+      <topic>/cmd_vel_chassis</topic>
+      <link_name>base_link</link_name>
+      <kp_linear>22.0</kp_linear>
+      <ki_linear>25.0</ki_linear>
+      <kp_angular>30.0</kp_angular>
+      <ki_angular>40.0</ki_angular>
+      <static_hold_kp>120.0</static_hold_kp>
+      <static_hold_ki>80.0</static_hold_ki>
+      <static_yaw_kp>80.0</static_yaw_kp>
+      <max_linear_vel>5.0</max_linear_vel>
+      <max_angular_vel>10.0</max_angular_vel>
+      <max_linear_accel>8.0</max_linear_accel>
+      <max_angular_accel>25.0</max_angular_accel>
+      <max_force>150.0</max_force>
+      <max_torque>30.0</max_torque>
+      <cmd_timeout>0.0</cmd_timeout>
+    </plugin>
 
-      <!-- 控制循环与物理步长对齐（world 里 max_step_size=0.001 → 1 kHz）。
-           原来是 100 Hz，等于每 10 ms 才覆写一次模型速度；两次覆写之间重力仍会积分
-           （约 -0.098 m/s 的竖直速度增量），落地后接触求解把这点能量转成水平方向的
-           微小位移，表现就是"没给速度机器人却缓慢移动"。提到 1000 Hz 后几乎没有
-           可以积累的间隙，静止时不再蠕动。publish_rate 仍是 10，不影响话题频率。 -->
-      <!-- Set control loop update rate -->
-      <update_rate>1000</update_rate>
-      <!-- Set odom publish rate -->
-      <publish_rate>10</publish_rate>
-
-      <!-- Set if odom required -->
-      <publish_odom>false</publish_odom>
-      <publish_odom_tf>false</publish_odom_tf>
-
-      <!-- Frame IDs -->
-      <odometry_frame>odom</odometry_frame>
-      <robot_base_frame>base_link</robot_base_frame>
-
-      <!-- Set odom covariance -->
-      <covariance_x>0.0001</covariance_x>
-      <covariance_y>0.0001</covariance_y>
-      <covariance_yaw>0.01</covariance_yaw>
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher">
+      <topic>/joint_states</topic>
+      <joint_name>base_to_wheel1</joint_name>
+      <joint_name>base_to_wheel2</joint_name>
+      <joint_name>base_to_wheel3</joint_name>
+      <joint_name>base_to_wheel4</joint_name>
+      <update_rate>50</update_rate>
     </plugin>
   </gazebo>
 
-  <!-- mid360_imu plugin：仿 Livox Mid-360 内置 IMU (ICM40609)
-       - 200 Hz：与实物 IMU 输出频率一致（原 100 Hz 偏慢，会让 LIO 预积分区间与点云帧不匹配）。
-       - 加速度单位 m/s^2：Gazebo 原生单位；Super-LIO 用 lio.sensor.gravity_norm 自标定，
-         只要加速度与陀螺单位自洽即可，无需换算成 g。
-       - 噪声：按实物量级加入高斯噪声（非手册精确标称值），保留噪声便于 LIO 在线估计协方差，
-         不想引入噪声时把对应 stddev 改为 0 即可。
-       - orientation 按 REP 145 是世界系参考，与实物一致（实物 IMU 不输出有效姿态），
-         下游 LIO 只取 acc/gyro，不受影响。
-       - frame_id 用 imu_link（与 URDF 中 imu_link 的真实安装位置一致）；
-         Super-LIO 不使用 TF，而是用 lio.extrinsic.lidar_imu 描述该外参，二者相互对应。 -->
-  <!-- https://github.com/ros-simulation/gazebo_ros_pkgs/wiki/ROS-2-Migration:-IMU-Sensors -->
+  <!-- mid360_imu：仿 Livox Mid-360 内置 IMU (ICM40609)
+       - 200 Hz，由 Gazebo Harmonic gz-sim-imu-system 原生输出并经 ros_gz_bridge 桥接到 /livox/imu。
+       - frame_id 为 imu_link，与 URDF 外参和 Super-LIO lio.extrinsic.lidar_imu 对齐。 -->
   <gazebo reference="imu_link">
     <sensor name="mid360_imu" type="imu">
       <always_on>true</always_on>
       <update_rate>200</update_rate>
+      <topic>/livox/imu</topic>
+      <gz_frame_id>imu_link</gz_frame_id>
       <imu>
         <angular_velocity>
           <x><noise type="gaussian"><mean>0.0</mean><stddev>0.002</stddev></noise></x>
@@ -267,20 +242,30 @@
           <z><noise type="gaussian"><mean>0.0</mean><stddev>0.02</stddev></noise></z>
         </linear_acceleration>
       </imu>
-      <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
-        <ros>
-          <namespace>/</namespace>
-          <remapping>~/out:=/livox/imu</remapping>
-        </ros>
-        <frame_name>imu_link</frame_name>
-      </plugin>
     </sensor>
   </gazebo>
 
-  <!-- Livox-Mid360  -->
-  <xacro:include filename="$(find ros2_livox_simulation)/urdf/mid360.xacro" />
-  <xacro:mid360 name="livox_frame" parent="base_link" topic="/livox/lidar">
-    <origin xyz="$(arg xyz)" rpy="$(arg rpy)" />
-  </xacro:mid360>
+  <!-- Livox-Mid360（阶段 2 启用 GPU 雷达与非重复扫描桥接） -->
+  <xacro:if value="$(arg use_livox)">
+    <xacro:include filename="$(find ros2_livox_simulation)/urdf/mid360.xacro" />
+    <xacro:mid360 name="livox_frame" parent="base_link" topic="/livox/lidar">
+      <origin xyz="$(arg xyz)" rpy="$(arg rpy)" />
+    </xacro:mid360>
+  </xacro:if>
+  <xacro:unless value="$(arg use_livox)">
+    <link name="livox_frame">
+      <visual>
+        <origin xyz="0.025 -0.0265 -0.025" rpy="${PI/2} 0 ${PI}"/>
+        <geometry>
+          <mesh filename="model://mid360.stl" scale="0.0008 0.0008 0.0008"/>
+        </geometry>
+      </visual>
+    </link>
+    <joint name="livox_frame_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="livox_frame"/>
+      <origin xyz="$(arg xyz)" rpy="$(arg rpy)"/>
+    </joint>
+  </xacro:unless>
 
 </robot>

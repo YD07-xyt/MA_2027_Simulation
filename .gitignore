@@ -45,6 +45,8 @@ docs/比赛规则
 build/
 Build/
 build-*/
+install/
+log/
 
 # CMake generated files
 CMakeFiles/
