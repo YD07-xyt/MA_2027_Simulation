@@ -210,13 +210,24 @@ public:
     // Do not apply drive forces if chassis has flipped over.
     if (z_b.Z() < 0.5)
     {
+      vel_int_x_ = 0.0;
+      vel_int_y_ = 0.0;
+      vel_int_w_ = 0.0;
+      pos_hold_active_ = false;
+      yaw_hold_active_ = false;
       return;
     }
 
     const double vx_curr = v_world.Dot(x_b);
     const double vy_curr = v_world.Dot(y_b);
+    const double vz_curr = v_world.Dot(z_b);
     const double wz_curr = w_world.Dot(z_b);
-    const bool grounded_hint = std::abs(v_world.Z()) < 0.15;
+    const bool grounded_hint = std::abs(vz_curr) < 0.25;
+
+    // Chassis-tangent gravity feedforward eliminates downhill rollback on
+    // slow slope starts and allows static hold to latch cleanly on steep ramps.
+    const double g_ff_x = grounded_hint ? (9.81 * x_b.Z()) : 0.0;
+    const double g_ff_y = grounded_hint ? (9.81 * y_b.Z()) : 0.0;
 
     // Linear tangent force control (X, Y in chassis frame; Z left purely to gravity/contact).
     double fx = 0.0;
@@ -232,11 +243,45 @@ public:
 
       const double err_vx = ref_vx_ - vx_curr;
       const double err_vy = ref_vy_ - vy_curr;
-      vel_int_x_ = clampValue(vel_int_x_ + err_vx * dt, 2.0);
-      vel_int_y_ = clampValue(vel_int_y_ + err_vy * dt, 2.0);
 
-      const double ax = kp_linear_ * err_vx + ki_linear_ * vel_int_x_;
-      const double ay = kp_linear_ * err_vy + ki_linear_ * vel_int_y_;
+      // Drop opposing integral on reversal and bleed inactive-axis integral so
+      // wall/ramp-edge contact cannot leave persistent opposing force.
+      if (cmd_vx * vel_int_x_ < 0.0)
+      {
+        vel_int_x_ = 0.0;
+      }
+      else if (std::abs(cmd_vx) < 1e-4 && std::abs(ref_vx_) < 1e-4)
+      {
+        vel_int_x_ *= std::max(0.0, 1.0 - 5.0 * dt);
+      }
+      if (cmd_vy * vel_int_y_ < 0.0)
+      {
+        vel_int_y_ = 0.0;
+      }
+      else if (std::abs(cmd_vy) < 1e-4 && std::abs(ref_vy_) < 1e-4)
+      {
+        vel_int_y_ *= std::max(0.0, 1.0 - 5.0 * dt);
+      }
+
+      const double max_vel_int = (ki_linear_ > 1e-6 && total_mass_ > 1e-6)
+          ? std::min(0.5, (0.5 * max_force_) / (total_mass_ * ki_linear_))
+          : 0.0;
+
+      // Conditional integration (clamping anti-windup) within traction circle.
+      const double fx_pre = total_mass_ * (g_ff_x + kp_linear_ * err_vx + ki_linear_ * vel_int_x_);
+      const double fy_pre = total_mass_ * (g_ff_y + kp_linear_ * err_vy + ki_linear_ * vel_int_y_);
+      const bool linear_saturated = std::hypot(fx_pre, fy_pre) >= max_force_;
+      if (!linear_saturated || (err_vx * fx_pre < 0.0))
+      {
+        vel_int_x_ = clampValue(vel_int_x_ + err_vx * dt, max_vel_int);
+      }
+      if (!linear_saturated || (err_vy * fy_pre < 0.0))
+      {
+        vel_int_y_ = clampValue(vel_int_y_ + err_vy * dt, max_vel_int);
+      }
+
+      const double ax = g_ff_x + kp_linear_ * err_vx + ki_linear_ * vel_int_x_;
+      const double ay = g_ff_y + kp_linear_ * err_vy + ki_linear_ * vel_int_y_;
       fx = total_mass_ * ax;
       fy = total_mass_ * ay;
     }
@@ -262,17 +307,17 @@ public:
         hold_int_y_ = clampValue(hold_int_y_ + ey * dt, 0.25);
 
         const double ax =
-            static_hold_kp_ * ex + static_hold_ki_ * hold_int_x_ - kp_linear_ * vx_curr;
+            g_ff_x + static_hold_kp_ * ex + static_hold_ki_ * hold_int_x_ - kp_linear_ * vx_curr;
         const double ay =
-            static_hold_kp_ * ey + static_hold_ki_ * hold_int_y_ - kp_linear_ * vy_curr;
+            g_ff_y + static_hold_kp_ * ey + static_hold_ki_ * hold_int_y_ - kp_linear_ * vy_curr;
         fx = total_mass_ * ax;
         fy = total_mass_ * ay;
       }
       else
       {
         // Braking cleanly down to zero before latching static hold.
-        fx = -total_mass_ * kp_linear_ * vx_curr;
-        fy = -total_mass_ * kp_linear_ * vy_curr;
+        fx = total_mass_ * (g_ff_x - kp_linear_ * vx_curr);
+        fy = total_mass_ * (g_ff_y - kp_linear_ * vy_curr);
       }
     }
 
@@ -295,7 +340,19 @@ public:
     {
       yaw_hold_active_ = false;
       const double err_w = ref_wz_ - wz_curr;
-      vel_int_w_ = clampValue(vel_int_w_ + err_w * dt, 2.0);
+      if (cmd_wz * vel_int_w_ < 0.0)
+      {
+        vel_int_w_ = 0.0;
+      }
+      const double max_vel_int_w = (ki_angular_ > 1e-6 && total_izz_ > 1e-6)
+          ? std::min(0.5, (0.5 * max_torque_) / (total_izz_ * ki_angular_))
+          : 0.0;
+      const double tau_pre = total_izz_ * (kp_angular_ * err_w + ki_angular_ * vel_int_w_);
+      const bool yaw_saturated = std::abs(tau_pre) >= max_torque_;
+      if (!yaw_saturated || (err_w * tau_pre < 0.0))
+      {
+        vel_int_w_ = clampValue(vel_int_w_ + err_w * dt, max_vel_int_w);
+      }
       tau_z = total_izz_ * (kp_angular_ * err_w + ki_angular_ * vel_int_w_);
     }
     else

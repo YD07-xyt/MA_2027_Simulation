@@ -57,8 +57,9 @@
       </material>
     </visual>
     <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.025"/>
       <geometry>
-        <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
+        <sphere radius="${radius_wheel}"/>
       </geometry>
     </collision>
     <xacro:default_inertial mass="0.5"/>
@@ -75,8 +76,9 @@
       </material>
     </visual>
     <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.025"/>
       <geometry>
-        <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
+        <sphere radius="${radius_wheel}"/>
       </geometry>
     </collision>
     <xacro:default_inertial mass="0.5"/>
@@ -91,8 +93,9 @@
       <material name="red"/>
     </visual>
     <collision>
+      <origin rpy="0 0 0" xyz="0 0 0.025"/>
       <geometry>
-        <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
+        <sphere radius="${radius_wheel}"/>
       </geometry>
     </collision>
     <xacro:default_inertial mass="0.5"/>
@@ -107,8 +110,9 @@
       <material name="black"/>
     </visual>
     <collision>
+      <origin rpy="0 0 0" xyz="0 0 0.025"/>
       <geometry>
-        <cylinder length="${length_wheel}" radius="${radius_wheel}"/>
+        <sphere radius="${radius_wheel}"/>
       </geometry>
     </collision>
     <xacro:default_inertial mass="0.5"/>
@@ -171,7 +175,11 @@
     </inertial>
   </link>
 
-  <!-- 轮地低滑动摩擦：允许底盘在全向力控下自由横移/旋转，同时稳定支撑车身随坡度贴地 -->
+  <!-- 轮地与底盘低滑动摩擦：允许底盘在全向力控下自由横移/旋转，避免坡顶/边沿剐蹭锁死 -->
+  <gazebo reference="base_link">
+    <mu1>0.02</mu1>
+    <mu2>0.02</mu2>
+  </gazebo>
   <gazebo reference="wheel_1">
     <mu1>0.02</mu1>
     <mu2>0.02</mu2>
