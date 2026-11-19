@@ -183,8 +183,14 @@ def generate_launch_description():
 
     declare_use_livox_cmd = DeclareLaunchArgument(
         'use_livox',
-        default_value='false',
-        description='Enable Livox Mid-360 GPU lidar xacro macro',
+        default_value='true',
+        description='Enable Livox Mid-360 GPU lidar and mid360_gz_bridge',
+    )
+
+    declare_lidar_noise_stddev_cmd = DeclareLaunchArgument(
+        'lidar_noise_stddev',
+        default_value='0.02',
+        description='Gaussian range noise stddev (m) injected into Mid-360 points',
     )
 
     declare_robot_description_cmd = DeclareLaunchArgument(
@@ -214,6 +220,30 @@ def generate_launch_description():
         output='screen',
     )
 
+    start_mid360_bridge_cmd = Node(
+        condition=IfCondition(use_livox),
+        package='ros2_livox_simulation',
+        executable='mid360_gz_bridge',
+        name='mid360_gz_bridge',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'gz_topic': '/livox/lidar/gz_scan',
+            'custom_topic': '/livox/lidar',
+            'pointcloud_topic': '/livox/lidar/pointcloud',
+            'frame_id': 'livox_frame',
+            'scan_rate': 10.0,
+            'subframes_per_scan': 5,
+            'points_per_scan': 20000,
+            'min_range': 0.1,
+            'max_range': 40.0,
+            'noise_mean': 0.0,
+            'noise_stddev': ParameterValue(
+                LaunchConfiguration('lidar_noise_stddev'), value_type=float
+            ),
+        }],
+        output='screen',
+    )
+
     start_rviz_cmd = Node(
         condition=IfCondition(use_rviz),
         package='rviz2',
@@ -234,11 +264,13 @@ def generate_launch_description():
     ld.add_action(declare_rviz_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_livox_cmd)
+    ld.add_action(declare_lidar_noise_stddev_cmd)
     ld.add_action(declare_robot_description_cmd)
 
     ld.add_action(OpaqueFunction(function=_launch_world_and_spawn))
     ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(start_ros_gz_bridge_cmd)
+    ld.add_action(start_mid360_bridge_cmd)
     ld.add_action(start_rviz_cmd)
 
     return ld
