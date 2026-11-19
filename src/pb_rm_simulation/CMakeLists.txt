@@ -35,6 +35,16 @@ target_link_libraries(pb_rm_omni_chassis_system PRIVATE
   gz-math7::gz-math7
 )
 
+add_library(pb_rm_dynamic_obstacle_system SHARED
+  src/dynamic_obstacle_system.cpp
+)
+target_compile_options(pb_rm_dynamic_obstacle_system PRIVATE -Wall -Wextra)
+target_link_libraries(pb_rm_dynamic_obstacle_system PRIVATE
+  gz-sim8::gz-sim8
+  gz-plugin2::register
+  gz-math7::gz-math7
+)
+
 #############
 ## Testing ##
 #############
@@ -52,7 +62,9 @@ endif()
 ## Install ##
 #############
 
-install(TARGETS pb_rm_omni_chassis_system
+install(TARGETS
+  pb_rm_omni_chassis_system
+  pb_rm_dynamic_obstacle_system
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin
@@ -65,6 +77,7 @@ install(DIRECTORY
   meshes
   world
   rviz
+  scripts
   DESTINATION share/${PROJECT_NAME}
 )
 

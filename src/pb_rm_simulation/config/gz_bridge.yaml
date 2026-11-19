@@ -23,3 +23,10 @@
   ros_type_name: "sensor_msgs/msg/JointState"
   gz_type_name: "gz.msgs.Model"
   direction: GZ_TO_ROS
+
+# 3D ground-truth odometry for evaluation/testing (intentionally no /tf bridge to avoid LIO TF conflicts)
+- ros_topic_name: "/sim/ground_truth/odom"
+  gz_topic_name: "/sim/ground_truth/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS

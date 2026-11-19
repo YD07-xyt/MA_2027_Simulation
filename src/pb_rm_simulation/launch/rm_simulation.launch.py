@@ -41,6 +41,7 @@ def get_world_config(world_type):
             'z': '1.16',
             'yaw': '0.0',
             'world_path': 'RMUL2024_world/RMUL2024_world.world',
+            'dynamic_world_path': 'RMUL2024_world/RMUL2024_world_dynamic_obstacles.world',
         },
         WorldType.RMUL2026H: {
             'x': '5.0',
@@ -48,6 +49,7 @@ def get_world_config(world_type):
             'z': '0.10',
             'yaw': '3.14159',
             'world_path': 'RMUL2026_world/RMUL2026_world.world',
+            'dynamic_world_path': 'RMUL2026_world/RMUL2026_world_dynamic_obstacles.world',
         },
         WorldType.RMUC2027: {
             # 出生点下方地面高约 0.29m，z 留出轮子半径和余量
@@ -79,8 +81,18 @@ def _launch_world_and_spawn(context, *args, **kwargs):
         )
 
     gui = _str_to_bool(LaunchConfiguration('gui').perform(context))
+    dynamic_obstacles = _str_to_bool(LaunchConfiguration('dynamic_obstacles').perform(context))
     gz_verbosity = LaunchConfiguration('gz_verbosity').perform(context)
-    world_file = os.path.join(bringup_dir, 'world', world_config['world_path'])
+    if dynamic_obstacles:
+        if 'dynamic_world_path' not in world_config:
+            raise ValueError(
+                f"World '{world_type}' does not define a dynamic obstacles variant. "
+                f"Supported dynamic_obstacles worlds: {WorldType.RMUL}, {WorldType.RMUL2026H}"
+            )
+        world_rel_path = world_config['dynamic_world_path']
+    else:
+        world_rel_path = world_config['world_path']
+    world_file = os.path.join(bringup_dir, 'world', world_rel_path)
 
     gz_flags = ['-r', '-v', gz_verbosity]
     if not gui:
@@ -155,6 +167,12 @@ def generate_launch_description():
         'world',
         default_value=WorldType.RMUC,
         description='Choose <RMUC>, <RMUL>, <RMUL2026H> or <RMUC2027>',
+    )
+
+    declare_dynamic_obstacles_cmd = DeclareLaunchArgument(
+        'dynamic_obstacles',
+        default_value='false',
+        description='Use dynamic obstacles world variant (supported for RMUL and RMUL2026H)',
     )
 
     declare_gui_cmd = DeclareLaunchArgument(
@@ -259,6 +277,7 @@ def generate_launch_description():
     ld.add_action(append_plugin_path)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_world_cmd)
+    ld.add_action(declare_dynamic_obstacles_cmd)
     ld.add_action(declare_gui_cmd)
     ld.add_action(declare_gz_verbosity_cmd)
     ld.add_action(declare_rviz_cmd)

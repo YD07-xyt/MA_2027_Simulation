@@ -219,6 +219,17 @@
       <joint_name>base_to_wheel4</joint_name>
       <update_rate>50</update_rate>
     </plugin>
+
+    <!-- 3D 真值里程计（仅发布 /sim/ground_truth/odom，不桥接 /tf，避免与 Super-LIO TF 冲突） -->
+    <plugin filename="gz-sim-odometry-publisher-system"
+            name="gz::sim::systems::OdometryPublisher">
+      <dimensions>3</dimensions>
+      <odom_frame>world</odom_frame>
+      <robot_base_frame>base_link</robot_base_frame>
+      <odom_topic>/sim/ground_truth/odom</odom_topic>
+      <odom_publish_frequency>50</odom_publish_frequency>
+      <gaussian_noise>0.0</gaussian_noise>
+    </plugin>
   </gazebo>
 
   <!-- mid360_imu：仿 Livox Mid-360 内置 IMU (ICM40609)
