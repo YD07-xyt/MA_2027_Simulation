@@ -6,7 +6,7 @@ Verifies:
   - 3D ground-truth odometry (/sim/ground_truth/odom @ ~50 Hz, zero /tf conflict with LIO)
   - IMU (/livox/imu @ ~200 Hz, frame_id=imu_link, acceleration in m/s^2)
   - Wheel joint states (/joint_states @ ~50 Hz)
-  - OmniChassisSystem static hold drift and holonomic drive tracking (/cmd_vel_chassis)
+  - OmniChassisSystem static hold drift and holonomic drive tracking (/cmd_vel)
   - Livox Mid-360 GPU lidar (/livox/lidar CustomMsg + 26-byte LivoxPointXyzrtlt PointCloud2)
   - Optional STL raycast interior accuracy & noise stddev check (RMUC2027)
   - Optional 5-subframe yaw motion deskew alignment against IMU angular velocity
@@ -65,7 +65,7 @@ class HarmonicSimVerifier(Node):
         self.create_subscription(CustomMsg, '/livox/lidar', self._on_custom, 30)
         self.create_subscription(PointCloud2, '/livox/lidar/pointcloud', self._on_cloud2, 30)
         self.create_subscription(TFMessage, '/tf', self._on_tf, 100)
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel_chassis', 10)
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
     def _on_clock(self, msg):
         self.clock_samples.append((time.monotonic(), msg.clock.sec + msg.clock.nanosec * 1e-9))

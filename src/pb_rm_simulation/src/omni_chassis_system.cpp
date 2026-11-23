@@ -452,7 +452,7 @@ private:
   bool configured_{false};
   bool inertia_initialized_{false};
 
-  std::string topic_{"/cmd_vel_chassis"};
+  std::string topic_{"/cmd_vel"};
   std::string link_name_{"base_link"};
 
   double kp_linear_{22.0};

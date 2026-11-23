@@ -200,7 +200,7 @@
   <!-- Gazebo Harmonic 全向底盘控制器与关节状态发布 -->
   <gazebo>
     <plugin filename="pb_rm_omni_chassis_system" name="pb_rm_simulation::OmniChassisSystem">
-      <topic>/cmd_vel_chassis</topic>
+      <topic>/cmd_vel</topic>
       <link_name>base_link</link_name>
       <kp_linear>22.0</kp_linear>
       <ki_linear>25.0</ki_linear>
